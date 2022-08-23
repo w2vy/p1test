@@ -6,12 +6,11 @@ import requests
 from fluxvault import FluxAgent
 from datetime import datetime
 
-#VAULT_NAME = "home.moulton.us"                    # EDIT ME
-VAULT_NAME = "localhost"                    # EDIT ME
+VAULT_NAME = "home.moulton.us"                    # EDIT ME
 FILE_DIR = "./files/"   # EDIT ME
 VAULT_PORT = 39289                                # EDIT ME
 APP_NAME = "p1test"                            # EDIT ME
-VERBOSE = False
+VERBOSE = True
 
 def logmsg(msg):
     dt = datetime.now()

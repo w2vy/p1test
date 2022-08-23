@@ -6,7 +6,7 @@ git clone https://github.com/RunOnFlux/FluxVault.git
 cd FluxVault
 git checkout python_class
 cd ..
-pip3 install FluxVault
+pip3 install ./FluxVault
 
 rm -f /tmp/node/quotes.txt /tmp/node/readme.txt
 

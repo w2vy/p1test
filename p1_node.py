@@ -7,7 +7,7 @@ import os
 import sys
 from fluxvault import FluxNode
 
-VAULT_NAME = "localhost"                    # EDIT ME
+VAULT_NAME = "home.moulton.us"                    # EDIT ME
 BOOTFILES = ["quotes.txt", "readme.txt"]    # EDIT ME
 FILE_DIR = "/tmp/node/"                     # EDIT ME
 VAULT_PORT = 39289                          # EDIT ME
@@ -53,11 +53,11 @@ if __name__ == '__main__':
     while True:
         if VAULT_NAME == "localhost" and VAULT_PORT == 39289:
             print("Running in Demo Mode files will be placed in ", FILE_DIR)
-            if os.path.isdir(FILE_DIR):
-                print("Warning ", FILE_DIR, " exists")
-            else:
-                print("Creating ", FILE_DIR)
-                os.makedirs(FILE_DIR)
+        if os.path.isdir(FILE_DIR):
+            print("Warning ", FILE_DIR, " exists")
+        else:
+            print("Creating ", FILE_DIR)
+            os.makedirs(FILE_DIR)
         if os.path.exists(FILE_DIR):
             node_server()
         else:
