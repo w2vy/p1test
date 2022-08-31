@@ -55,7 +55,10 @@ def get_flux(the_node, path):
         if len(the_node.split(":")) == 1:
             the_node = the_node + ":16127"
     url = "http://" + the_node + "/" + path
-    req = requests.get(url)
+    try:
+        req = requests.get(url, timeout=10)
+    except:
+        return None
     # Get the list of nodes where our app is deplolyed
     ret_data = None
     if req.status_code == 200:
@@ -77,7 +80,7 @@ class MyFluxAgent(FluxAgent):
 def node_vault():
     '''Vault runs this to poll every Flux node running their app'''
     url = "https://api.runonflux.io/apps/location/" + APP_NAME
-    req = requests.get(url)
+    req = requests.get(url, timeout=10)
     # Get the list of nodes where our app is deplolyed
     if req.status_code == 200:
         values = json.loads(req.text)
@@ -96,9 +99,15 @@ def node_vault():
 
             for this_node in nodes:
                 data = get_flux(this_node['ip'], "daemon/getzelnodestatus")
+                if data is None:
+                    print(logmsg(this_node['ip'] + "get status failed"))
+                    continue
                 status = data['status']
                 tier = data['tier']
                 data = get_flux(this_node['ip'], "apps/listrunningapps")
+                if data is None:
+                    print(logmsg(this_node['ip'] + "get running apps failed"))
+                    continue
                 app_state = ""
                 for app in data:
                     if app["Names"][0] == "/fluxp1test_p1":
@@ -111,20 +120,20 @@ def node_vault():
                 else:
                     if VERBOSE:
                         print("New Node " + this_node['ip'])
-                    msg = logmsg("New Instance " + node['ip'])
+                    msg = logmsg("New Instance " + this_node['ip'])
                     mylog = { 'log': [msg], 'min':999999999, 'max':0, 'avg':0,
                         'active':1, 'reported':0 }
                 start = datetime.now()
                 agent = MyFluxAgent() # Each connection to a node get a fresh agent
                 ipadr = this_node['ip'].split(':')[0]
                 if VERBOSE:
-                    print(node['name'], ipadr)
+                    print(this_node['name'], ipadr)
                 agent.node_vault_ip(ipadr)
                 dt = datetime.now() - start
                 ms = round(dt.microseconds/1000)+dt.seconds*1000
                 if VERBOSE:
                     print(ms, " ms")
-                    print(node['name'], ipadr, agent.result)
+                    print(this_node['name'], ipadr, agent.result)
                 if 'min' not in mylog:
                     mylog['min'] = mylog['max'] = mylog['avg'] = 0
                 if ms < mylog['min']:
