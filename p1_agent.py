@@ -62,10 +62,13 @@ def get_flux(the_node, path):
     # Get the list of nodes where our app is deplolyed
     ret_data = None
     if req.status_code == 200:
-        values = json.loads(req.text)
-        if values["status"] == "success":
-            # json looks good and status correct, iterate through node list
-            ret_data = values["data"]
+        try:
+            values = json.loads(req.text)
+            if values["status"] == "success":
+                # json looks good and status correct, iterate through node list
+                ret_data = values["data"]
+        except:
+            ret_data = None
     return ret_data
 
 class MyFluxAgent(FluxAgent):
