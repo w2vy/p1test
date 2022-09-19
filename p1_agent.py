@@ -103,13 +103,13 @@ def node_vault():
             for this_node in nodes:
                 data = get_flux(this_node['ip'], "daemon/getzelnodestatus")
                 if data is None:
-                    print(logmsg(this_node['ip'] + "get status failed"))
+                    print(logmsg(this_node['ip'] + " get status failed"))
                     continue
                 status = data['status']
                 tier = data['tier']
                 data = get_flux(this_node['ip'], "apps/listrunningapps")
                 if data is None:
-                    print(logmsg(this_node['ip'] + "get running apps failed"))
+                    print(logmsg(this_node['ip'] + " get running apps failed"))
                     continue
                 app_state = ""
                 for app in data:
