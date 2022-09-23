@@ -216,6 +216,55 @@ def fix_db(db):
             print("Updated ", updates, " records")
     db.close()
 
+def node_details(db, node):
+    print(node)
+    DETAILS = "SELECT * from `node_status` WHERE `node_hash` LIKE '" + node[2] + "' ORDER BY `node_status`.`time` ASC"
+    #print(DETAILS)
+    cur = db.cursor()
+    cur.execute(DETAILS)
+    list = cur.fetchall()
+    for row in list:
+        print(row[1].strftime("%m/%d/%Y, %H:%M:%S"), row[4], row[5], row[6])
+
+def examine_db(db):
+    '''Examine the db to find nodes that are failing'''
+    SUMMARY = "SELECT count(*) as count, sum(`node_health`) as health,`node_hash`,`node_ip` FROM `node_status`" + \
+        " WHERE 1 GROUP BY `node_hash` ORDER BY count(*)  DESC"
+    cur = db.cursor()
+    cur.execute(SUMMARY)
+    nodes = cur.fetchall()
+    summary = {}
+    summary["Mixed"] = 0
+    for node in nodes:
+        count = int(node[0])
+        health = int(str(node[1]))
+        avg = health / count
+        node_summary = {}
+        if count < 8:
+            node_summary["Young"] = 1
+        else:
+            if avg < 99.0:
+                DETAILS = "SELECT * from `node_status` WHERE `node_hash` LIKE '" + node[2] + "' ORDER BY `node_status`.`time` ASC"
+                cur = db.cursor()
+                cur.execute(DETAILS)
+                list = cur.fetchall()
+                for row in list:
+                    if row[5] not in node_summary:
+                        node_summary[row[5]] = 0
+                    node_summary[row[5]] = node_summary[row[5]] + 1
+            else:
+                node_summary["Perfect"] = 1
+        if len(node_summary) == 1:
+            for key in node_summary:
+                if key not in summary:
+                    summary[key] = 1
+                else:
+                    summary[key] = summary[key] + 1
+        else:
+            summary["Mixed"] = summary["Mixed"] + 1
+    print(summary)
+    db.close()
+
 def check_nodes(filter, db):
     '''Check all running instances and see if we can reach the app'''
     global max_nodes, num_checked, num_good, num_nodes
@@ -287,6 +336,7 @@ def check_nodes(filter, db):
                     app_state += " State " + app["State"] + " Status " + app["Status"] + " "
                     ports = app["Ports"]
                     nports = 0
+                    # If this is the P1 app (or Gammonbot?) then wait for the Private Key (or rejected IP)
                     for port in ports:
                         if "IP" in port and port["IP"] == "0.0.0.0" and port["Type"] == "tcp":
                             found_ports = True
@@ -336,7 +386,6 @@ def mysql_init(my_host, my_user, my_passwd, my_db):
     cursorObject = dataBase.cursor()
     cursorObject.execute("SHOW TABLES;")
     result = cursorObject.fetchall()
-    print(result)
     if len(result) == 0: # Empty db create table(s)
         cursorObject.execute(NODE_STATUS_TABLE)
     cursorObject.close()
@@ -353,8 +402,8 @@ if __name__ == "__main__":
         if sys.argv[arg].lower() == "--mysql" and len(sys.argv)> arg+4:
             dataBase = mysql_init(sys.argv[arg+1], sys.argv[arg+2], sys.argv[arg+3], sys.argv[arg+4])
         arg = arg + 5
-        if len(sys.argv) > arg and sys.argv[arg].lower() == "--fix":
-            fix_db(dataBase)
+        if len(sys.argv) > arg and sys.argv[arg].lower() == "--examine":
+            examine_db(dataBase)
             sys.exit(0)
         if len(sys.argv) > arg and sys.argv[arg].lower() == "--all":
             filter = ""
