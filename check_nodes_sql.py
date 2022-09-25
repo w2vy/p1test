@@ -16,6 +16,22 @@ num_nodes = 0
 num_checked = 0
 num_good = 0
 
+summary_header = '''
+Perfect - All samples scores 100%
+Healed - A Mixed node with a score > 80% and latest score 100 (CONFIRMED)
+Mixed - Mixed results with score < 80% or < 99% and latest sample not CONFIRMED
+Young - A node with less than 3 samples
+expired - Flux state is expired
+
+The following summary types are hard failures with all samples reflecting this state
+noapiport -       Was not able to connect to the RPC Port 16127
+getpeersfailed -  Connected but flux/connectedpeers failed
+nonroutablepeer - Found non-routable IP address in peer list (10.x, 192.168.x etc)
+incomingfailed -  Get flux/incomingconnections failed
+nonroutableincoming - Found non-Routable IP in incoming connections
+nolistapps -      Get apps/listrunningapps failed
+
+'''
 def include(filename):
     if os.path.exists(filename): 
         os.execfile(filename)
@@ -78,13 +94,23 @@ def non_routable_ip(ip_adr):
         return True
     return False
 
+def get_node_ip_or_local(the_node):
+    include("local_nodes.py")
+    if the_node in local_nodes:
+        the_node = local_nodes[the_node]
+    node_ip = the_node.split(":")[0]
+    return node_ip
+
 def get_flux(the_node, path):
     '''Call flux API'''
+    include("local_nodes.py")
     if len(the_node) == 0:
         the_node = "api.runonflux.io"
     else:
         if len(the_node.split(":")) == 1:
             the_node = the_node + ":16127"
+    if the_node in local_nodes:
+        the_node = local_nodes[the_node]
     url = "http://" + the_node + "/" + path
     try:
         req = requests.get(url, timeout=5)
@@ -234,35 +260,77 @@ def examine_db(db):
     cur.execute(SUMMARY)
     nodes = cur.fetchall()
     summary = {}
-    summary["Mixed"] = 0
+    summary["expired"] = []
+    summary["Mixed"] = []
+    summary["Healed"] = []
+    young_healthy = 0
+    young_good = 0
     for node in nodes:
         count = int(node[0])
         health = int(str(node[1]))
         avg = health / count
         node_summary = {}
-        if count < 8:
+        last_state = "CONFIRMED"
+        last_ip = "unknown"
+        if count < 3:
             node_summary["Young"] = 1
+            if avg > 99.0:
+                young_healthy = young_healthy + 1
+            else:
+                if avg > 80.0:
+                    young_good = young_good + 1
+            # DETAILS = "SELECT * from `node_status` WHERE `node_hash` LIKE '" + node[2] + "' ORDER BY `node_status`.`time` ASC"
+            # cur = db.cursor()
+            # cur.execute(DETAILS)
+            # list = cur.fetchall()
+            # for row in list:
+            #     print(row)
         else:
             if avg < 99.0:
-                DETAILS = "SELECT * from `node_status` WHERE `node_hash` LIKE '" + node[2] + "' ORDER BY `node_status`.`time` ASC"
+                DETAILS = "SELECT `node_state`, `node_comment`, `node_ip` from `node_status` WHERE `node_hash` LIKE '" + node[2] + "' ORDER BY `node_status`.`time` ASC"
                 cur = db.cursor()
                 cur.execute(DETAILS)
                 list = cur.fetchall()
                 for row in list:
-                    if row[5] not in node_summary:
-                        node_summary[row[5]] = 0
-                    node_summary[row[5]] = node_summary[row[5]] + 1
+                    if row[0] not in node_summary:
+                        node_summary[row[0]] = 0
+                    node_summary[row[0]] = node_summary[row[0]] + 1
+                    last_state = row[0] # For unstable nodes to be good the current state must be CONFIRMED, grab IP
+                    last_ip = row[2]
             else:
                 node_summary["Perfect"] = 1
         if len(node_summary) == 1:
             for key in node_summary:
                 if key not in summary:
-                    summary[key] = 1
+                    summary[key] = [node[2]]
                 else:
-                    summary[key] = summary[key] + 1
+                    summary[key].append(node[2])
         else:
-            summary["Mixed"] = summary["Mixed"] + 1
-    print(summary)
+            max = 0
+            sum = 0
+            name = ""
+            for ns in node_summary:
+                if node_summary[ns] > max:
+                    max = node_summary[ns] # Find most common state (is it CONFIRMED?)
+                    name = ns
+                sum = sum + node_summary[ns]
+            if last_state == "expired":
+                summary["expired"].append([node[2], node_summary])
+            else:
+                if last_state == "CONFIRMED" and name == "CONFIRMED" and sum/len(node_summary) > 0.80:
+                    summary["Healed"].append([node[2], node_summary])
+                else:
+                    summary["Mixed"].append([node[2], last_ip, node_summary])
+    print(summary_header)
+    for line in summary:
+        if line != "Mixed":
+            if line == "Young":
+                print("%6d Young (%d appear healthy)" % (len(summary[line]), young_healthy))
+            else:
+                print("%6d %s" % (len(summary[line]), line))
+    print("%6d Mixed Results" % (len(summary["Mixed"])))
+    for mixed in summary["Mixed"]:
+        print(mixed[0], mixed[1], mixed[2])
     db.close()
 
 def check_nodes(filter, db):
@@ -343,7 +411,7 @@ def check_nodes(filter, db):
                             nports += 1
                             sport = str(port["PublicPort"])
                             app_state += sport + " "
-                            node_ip = this_node['ip'].split(":")[0]
+                            node_ip = get_node_ip_or_local(this_node["ip"])
                             sock = node_connection(port["PublicPort"], node_ip)
                             if isinstance(sock, str):
                                 app_state += "FAILED " + sock + " "
